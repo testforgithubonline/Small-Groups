@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>小組</title>
+  <script type="text/javascript" src="jquery.min.js"></script>
+  <script type="text/javascript" src="turn.min.js"></script>
+
+  <style type="text/css">
+    body {
+      background: #ccc;
+      margin: 0;
+      padding: 0;
+    }
+    #magazine {
+      width: 1152px;
+      height: 864px;
+      margin: 0 auto;
+    }
+    #magazine .turn-page {
+      background-color: #ccc;
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center center;
+    }
+    #noVideoMessage {
+      display: none;
+      font-size: 22px;
+      color: red;
+      padding: 40px;
+      background: white;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="magazine">
+    <section align="center">
+      <div align="center" style="width:100%; height:100%; background-color:white; display:flex; flex-direction:column; justify-content:center; align-items:center;">
+        <iframe
+          id="todayVideo"
+          width="1120"
+          height="630"
+          src=""
+          title="YouTube video player"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allowfullscreen>
+        </iframe>
+        <div id="noVideoMessage">今天沒有設定影片連結</div>
+      </div>
+    </section>
+  </div>
+
+  <script type="text/javascript">
+    function getTodayDate() {
+      const today = new Date();
+      const day = String(today.getDate()).padStart(2, '0');
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const year = today.getFullYear();
+      return `${day}-${month}-${year}`;
+    }
+
+    const today = getTodayDate();
+    const magazine = document.getElementById('magazine');
+    const imageList = [];
+
+    function checkImage(src) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(src);
+        img.onerror = () => resolve(null);
+        img.src = src;
+      });
+    }
+
+    async function loadAllImages() {
+      const extensions = ['jpeg', 'jpg', 'png', 'webp'];
+      const maxNum = 200; // 最多支援到 _200
+      const checkList = [];
+
+      // 不帶編號的圖片
+      extensions.forEach(ext => {
+        checkList.push(`images/${today}.${ext}`);
+      });
+
+      // 帶編號的圖片 _01 ~ _200
+      for (let i = 1; i <= maxNum; i++) {
+        const num = String(i).padStart(2, '0');
+        extensions.forEach(ext => {
+          checkList.push(`images/${today}_${num}.${ext}`);
+        });
+      }
+
+      const results = await Promise.all(checkList.map(src => checkImage(src)));
+
+      results.forEach(src => {
+        if (src) {
+          imageList.push(src);
+        }
+      });
+
+      imageList.forEach(src => {
+        const page = document.createElement('div');
+        page.style.backgroundImage = `url('${src}')`;
+        magazine.appendChild(page);
+      });
+
+      $('#magazine').turn({
+        display: 'single',
+        acceleration: true,
+        gradients: !$.isTouch,
+        elevation: 50,
+        when: {
+          turned: function(e, page) {}
+        }
+      });
+    }
+
+    fetch('links.txt')
+    .then(response => response.text())
+    .then(text => {
+    const lines = text.trim().split('\n');
+    let foundLink = null;
+
+    for (let line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length >= 2) {
+        const date = parts[0];
+        const url = parts.slice(1).join(' ');
+        if (date === today) {
+          foundLink = url;
+          break;
+        }
+      }
+    }
+
+    const iframe = document.getElementById('todayVideo');
+    const message = document.getElementById('noVideoMessage');
+
+    if (foundLink) {
+      // 自動把普通 YouTube 連結轉換成 embed 格式
+      let embedUrl = foundLink;
+
+      if (foundLink.includes('youtube.com/watch?v=')) {
+        const videoId = foundLink.split('v=')[1].split('&')[0];
+        embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      } else if (foundLink.includes('youtu.be/')) {
+        const videoId = foundLink.split('youtu.be/')[1].split('?')[0];
+        embedUrl = `https://www.youtube.com/embed/${videoId}`;
+      } else if (foundLink.includes('youtube-nocookie.com/embed/')) {
+        // 已經是 embed 格式，不需轉換
+        embedUrl = foundLink;
+      }
+
+      iframe.src = embedUrl;
+    } else {
+      iframe.style.display = 'none';
+      message.style.display = 'block';
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    document.getElementById('todayVideo').style.display = 'none';
+    document.getElementById('noVideoMessage').style.display = 'block';
+    document.getElementById('noVideoMessage').innerText = "無法讀取 links.txt";
+  });
+
+    loadAllImages();
+
+    $(window).bind('keydown', function(e) {
+      if (e.keyCode == 37)
+        $('#magazine').turn('previous');
+      else if (e.keyCode == 39)
+        $('#magazine').turn('next');
+    });
+  </script>
+</body>
+</html>
